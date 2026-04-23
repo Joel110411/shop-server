@@ -1,5 +1,22 @@
 import express from "express";
 import cors from "cors";
+
+app.use(cors({
+  origin: [
+    "https://sixteenquarters.netlify.app",
+    "http://localhost:5500"
+  ],
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
+}));
+
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "https://sixteenquarters.netlify.app");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  next();
+});
+
 import { createClient } from "@supabase/supabase-js";
 
 const app = express();
