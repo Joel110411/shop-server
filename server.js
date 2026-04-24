@@ -5,27 +5,17 @@ import { createClient } from "@supabase/supabase-js";
 
 console.log("Server startet...");
 
-// =====================
-// APP INIT
-// =====================
 const app = express();
 
 // =====================
-// CORS (FINAL FIX)
+// CORS
 // =====================
-const corsOptions = {
-  origin: "https://sixteenquarters.netlify.app",
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type"],
-};
+app.use(cors({
+  origin: "https://sixteenquarters.netlify.app"
+}));
 
-// CORS aktivieren
-app.use(cors(corsOptions));
+app.options("*", cors());
 
-// Preflight (SEHR WICHTIG)
-app.options("*", cors(corsOptions));
-
-// JSON Parser
 app.use(express.json());
 
 // =====================
@@ -47,27 +37,22 @@ function generateCode() {
 // SEND CODE
 // =====================
 app.post("/send-code", async (req, res) => {
-  try {
- const response = await fetch("https://api.resend.com/emails", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    from: "onboarding@resend.dev",
-    to: email,
-    subject: "Login Code",
-    html: `<h2>Code: ${code}</h2>`
-  })
-});
 
-const result = await response.json();
-console.log("RESEND RESPONSE:", result);
+  try {
+    const { email } = req.body;
+
+    console.log("EMAIL:", email);
+
+    if (!email) {
+      return res.status(400).json({ success: false, error: "No email" });
+    }
+
     const code = generateCode();
 
-    // In DB speichern
-    await supabase.from("login_codes").insert([
+    console.log("CODE:", code);
+
+    // 👉 TEST: Supabase
+    const dbRes = await supabase.from("login_codes").insert([
       {
         email,
         code,
@@ -75,38 +60,45 @@ console.log("RESEND RESPONSE:", result);
       },
     ]);
 
-    // Mail senden (Resend)
-    await fetch("https://api.resend.com/emails", {
+    console.log("DB RESULT:", dbRes);
+
+    // 👉 TEST: Resend
+    const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Shop <onboarding@resend.dev>",
+        from: "onboarding@resend.dev",
         to: email,
-        subject: "Dein Login Code",
+        subject: "Login Code",
         html: `<h2>Dein Code: ${code}</h2>`,
       }),
     });
 
+    const result = await response.json();
+    console.log("RESEND RESPONSE:", result);
+
+    if (!response.ok) {
+      return res.status(500).json({ success: false, error: result });
+    }
+
     res.json({ success: true });
+
   } catch (err) {
-    console.error("SEND CODE ERROR:", err);
+    console.error("SERVER ERROR:", err);
     res.status(500).json({ success: false });
   }
+
 });
 
 // =====================
-// VERIFY CODE
+// VERIFY
 // =====================
 app.post("/verify", async (req, res) => {
   try {
     const { email, code } = req.body;
-
-    if (!email || !code) {
-      return res.status(400).json({ success: false });
-    }
 
     const { data } = await supabase
       .from("login_codes")
@@ -119,10 +111,10 @@ app.post("/verify", async (req, res) => {
       return res.json({ success: false });
     }
 
-    // Session speichern
     await supabase.from("sessions").insert([{ email }]);
 
     res.json({ success: true });
+
   } catch (err) {
     console.error("VERIFY ERROR:", err);
     res.status(500).json({ success: false });
@@ -130,14 +122,10 @@ app.post("/verify", async (req, res) => {
 });
 
 // =====================
-// TEST ROUTE
-// =====================
 app.get("/", (req, res) => {
   res.send("Server läuft!");
 });
 
-// =====================
-// SERVER START
 // =====================
 const PORT = process.env.PORT || 3000;
 
