@@ -100,6 +100,16 @@ app.post("/verify", async (req, res) => {
   try {
     const { email, code } = req.body;
 
+    const cleanInput = code.trim();
+const cleanStored = String(latest.code).trim();
+
+console.log("EINGEGEBEN:", cleanInput);
+console.log("GESPEICHERT:", cleanStored);
+
+if (cleanStored !== cleanInput) {
+  return res.json({ success: false });
+}
+
     console.log("VERIFY:", email, code);
 
     // 🔥 Hole den NEUSTEN Code
