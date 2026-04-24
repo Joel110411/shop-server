@@ -100,17 +100,35 @@ app.post("/verify", async (req, res) => {
   try {
     const { email, code } = req.body;
 
-    const { data } = await supabase
+    console.log("VERIFY:", email, code);
+
+    // 🔥 Hole den NEUSTEN Code
+    const { data, error } = await supabase
       .from("login_codes")
       .select("*")
       .eq("email", email)
-      .eq("code", code)
-      .single();
+      .order("expires", { ascending: false })
+      .limit(1);
 
-    if (!data) {
+    if (error || !data || data.length === 0) {
       return res.json({ success: false });
     }
 
+    const latest = data[0];
+
+    console.log("LATEST CODE:", latest.code);
+
+    // 🔥 Code vergleichen
+    if (latest.code !== code) {
+      return res.json({ success: false });
+    }
+
+    // 🔥 Ablauf prüfen
+    if (new Date(latest.expires) < new Date()) {
+      return res.json({ success: false, message: "Code abgelaufen" });
+    }
+
+    // ✅ Erfolg
     await supabase.from("sessions").insert([{ email }]);
 
     res.json({ success: true });
