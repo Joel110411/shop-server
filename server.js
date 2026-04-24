@@ -48,12 +48,22 @@ function generateCode() {
 // =====================
 app.post("/send-code", async (req, res) => {
   try {
-    const { email } = req.body;
+ const response = await fetch("https://api.resend.com/emails", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    from: "onboarding@resend.dev",
+    to: email,
+    subject: "Login Code",
+    html: `<h2>Code: ${code}</h2>`
+  })
+});
 
-    if (!email) {
-      return res.status(400).json({ success: false });
-    }
-
+const result = await response.json();
+console.log("RESEND RESPONSE:", result);
     const code = generateCode();
 
     // In DB speichern
