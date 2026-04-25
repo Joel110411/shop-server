@@ -98,21 +98,21 @@ app.post("/send-code", async (req, res) => {
 // =====================
 app.post("/verify", async (req, res) => {
   try {
-    const { email, code } = req.body;
+    let { email, code } = req.body;
 
-    const cleanInput = code.trim();
-const cleanStored = String(latest.code).trim();
+    console.log("VERIFY REQUEST RAW:", email, code);
 
-console.log("EINGEGEBEN:", cleanInput);
-console.log("GESPEICHERT:", cleanStored);
+    // 🔥 Eingaben bereinigen (SEHR WICHTIG)
+    email = String(email).trim().toLowerCase();
+    code = String(code).trim();
 
-if (cleanStored !== cleanInput) {
-  return res.json({ success: false });
-}
+    console.log("VERIFY CLEANED:", email, code);
 
-    console.log("VERIFY:", email, code);
+    if (!email || !code) {
+      return res.status(400).json({ success: false, message: "Missing data" });
+    }
 
-    // 🔥 Hole den NEUSTEN Code
+    // 🔥 Neuesten Code holen (KEIN .single!)
     const { data, error } = await supabase
       .from("login_codes")
       .select("*")
@@ -120,32 +120,58 @@ if (cleanStored !== cleanInput) {
       .order("expires", { ascending: false })
       .limit(1);
 
-    if (error || !data || data.length === 0) {
-      return res.json({ success: false });
+    if (error) {
+      console.error("DB ERROR:", error);
+      return res.status(500).json({ success: false });
+    }
+
+    if (!data || data.length === 0) {
+      console.log("KEIN CODE GEFUNDEN");
+      return res.json({ success: false, message: "No code found" });
     }
 
     const latest = data[0];
 
-    console.log("LATEST CODE:", latest.code);
+    const storedCode = String(latest.code).trim();
 
-    // 🔥 Code vergleichen
-    if (latest.code !== code) {
-      return res.json({ success: false });
+    console.log("STORED CODE:", storedCode);
+    console.log("INPUT CODE:", code);
+
+    // 🔥 VERGLEICH (JETZT SICHER)
+    if (storedCode !== code) {
+      console.log("CODE STIMMT NICHT");
+      return res.json({ success: false, message: "Wrong code" });
     }
 
-    // 🔥 Ablauf prüfen
+    // 🔥 ABLAUFZEIT CHECK
     if (new Date(latest.expires) < new Date()) {
-      return res.json({ success: false, message: "Code abgelaufen" });
+      console.log("CODE ABGELAUFEN");
+      return res.json({ success: false, message: "Code expired" });
     }
 
-    // ✅ Erfolg
-    await supabase.from("sessions").insert([{ email }]);
+    // 🔥 SESSION SPEICHERN
+    const sessionRes = await supabase.from("sessions").insert([
+      {
+        email,
+        created_at: new Date()
+      }
+    ]);
 
-    res.json({ success: true });
+    console.log("SESSION RESULT:", sessionRes);
+
+    // 🔥 OPTIONAL: Code löschen nach Nutzung
+    await supabase
+      .from("login_codes")
+      .delete()
+      .eq("email", email);
+
+    console.log("LOGIN ERFOLGREICH");
+
+    return res.json({ success: true });
 
   } catch (err) {
-    console.error("VERIFY ERROR:", err);
-    res.status(500).json({ success: false });
+    console.error("VERIFY SERVER ERROR:", err);
+    return res.status(500).json({ success: false });
   }
 });
 
