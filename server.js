@@ -112,6 +112,19 @@ app.post("/verify", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing data" });
     }
 
+    const { data: adminData } = await supabase
+  .from("admin_users")
+  .select("*")
+  .eq("email", email);
+
+let role = "customer";
+
+if (adminData && adminData.length > 0) {
+  role = adminData[0].role;
+}
+
+return res.json({ success: true, role });
+
     // 🔥 Neuesten Code holen (KEIN .single!)
     const { data, error } = await supabase
       .from("login_codes")
@@ -156,6 +169,7 @@ app.post("/verify", async (req, res) => {
         created_at: new Date()
       }
     ]);
+    
 
     console.log("SESSION RESULT:", sessionRes);
 
