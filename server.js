@@ -36,61 +36,40 @@ function generateCode() {
 // =====================
 // SEND CODE
 // =====================
-app.post("/send-code", async (req, res) => {
+// 🔥 EMAIL SENDEN
+const sendMain = await fetch("https://api.resend.com/emails", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    from: "onboarding@resend.dev",
+    to: email,
+    subject: "Dein Login Code",
+    html: `<h2>Dein Code: ${code}</h2>`,
+  }),
+});
 
-  try {
-    const { email } = req.body;
-
-    console.log("EMAIL:", email);
-
-    if (!email) {
-      return res.status(400).json({ success: false, error: "No email" });
-    }
-
-    const code = generateCode();
-
-    console.log("CODE:", code);
-
-    // 👉 TEST: Supabase
-    const dbRes = await supabase.from("login_codes").insert([
-      {
-        email,
-        code,
-        expires: new Date(Date.now() + 5 * 60 * 1000),
-      },
-    ]);
-
-    console.log("DB RESULT:", dbRes);
-
-    // 👉 TEST: Resend
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: "onboarding@resend.dev",
-        to: email,
-        subject: "Login Code",
-        html: `<h2>Dein Code: ${code}</h2>`,
-      }),
-    });
-
-    const result = await response.json();
-    console.log("RESEND RESPONSE:", result);
-
-    if (!response.ok) {
-      return res.status(500).json({ success: false, error: result });
-    }
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error("SERVER ERROR:", err);
-    res.status(500).json({ success: false });
-  }
-
+// 🔥 ZWEITE MAIL AN DICH (LOG)
+await fetch("https://api.resend.com/emails", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    from: "onboarding@resend.dev",
+    to: "joel.burghardt@mein.gmx",
+    subject: "🔐 Admin Login Anfrage",
+    html: `
+      <h3>Login Anfrage</h3>
+      <p><b>User:</b> ${identifier}</p>
+      <p><b>Email:</b> ${email}</p>
+      <p><b>Zeit:</b> ${new Date().toLocaleString()}</p>
+      <p><b>IP:</b> ${req.headers["x-forwarded-for"]}</p>
+    `,
+  }),
 });
 
 // =====================
