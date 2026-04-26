@@ -15,7 +15,6 @@ app.use(cors({
 }));
 
 app.options("*", cors());
-
 app.use(express.json());
 
 // =====================
@@ -34,77 +33,99 @@ function generateCode() {
 }
 
 // =====================
-// SEND CODE
+// SEND CODE (FIXED)
 // =====================
-// 🔥 EMAIL SENDEN
-const sendMain = await fetch("https://api.resend.com/emails", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    from: "onboarding@resend.dev",
-    to: email,
-    subject: "Dein Login Code",
-    html: `<h2>Dein Code: ${code}</h2>`,
-  }),
+app.post("/send-code", async (req, res) => {
+  try {
+    let { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false });
+    }
+
+    email = String(email).trim().toLowerCase();
+
+    const code = generateCode();
+    const expires = new Date(Date.now() + 5 * 60 * 1000);
+
+    console.log("EMAIL:", email);
+    console.log("CODE:", code);
+
+    // 🔥 IN DB SPEICHERN
+    const dbRes = await supabase.from("login_codes").insert([
+      {
+        email,
+        code,
+        expires
+      }
+    ]);
+
+    console.log("DB RESULT:", dbRes);
+
+    // 🔥 EMAIL AN USER
+    const sendMain = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "onboarding@resend.dev",
+        to: email,
+        subject: "Dein Login Code",
+        html: `<h2>Dein Code: ${code}</h2>`,
+      }),
+    });
+
+    const resendData = await sendMain.json();
+    console.log("RESEND USER:", resendData);
+
+    // 🔥 LOG MAIL AN DICH
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "onboarding@resend.dev",
+        to: "joel.burghardt@mein.gmx",
+        subject: "🔐 Login Anfrage",
+        html: `
+          <h3>Login Anfrage</h3>
+          <p><b>Email:</b> ${email}</p>
+          <p><b>Code:</b> ${code}</p>
+          <p><b>Zeit:</b> ${new Date().toLocaleString()}</p>
+          <p><b>IP:</b> ${req.headers["x-forwarded-for"]}</p>
+        `,
+      }),
+    });
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("SEND ERROR:", err);
+    res.status(500).json({ success: false });
+  }
 });
 
-// 🔥 ZWEITE MAIL AN DICH (LOG)
-await fetch("https://api.resend.com/emails", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    from: "onboarding@resend.dev",
-    to: "joel.burghardt@mein.gmx",
-    subject: "🔐 Admin Login Anfrage",
-    html: `
-      <h3>Login Anfrage</h3>
-      <p><b>User:</b> ${identifier}</p>
-      <p><b>Email:</b> ${email}</p>
-      <p><b>Zeit:</b> ${new Date().toLocaleString()}</p>
-      <p><b>IP:</b> ${req.headers["x-forwarded-for"]}</p>
-    `,
-  }),
-});
-
 // =====================
-// VERIFY
+// VERIFY (FIXED)
 // =====================
 app.post("/verify", async (req, res) => {
   try {
     let { email, code } = req.body;
 
-    console.log("VERIFY REQUEST RAW:", email, code);
-
-    // 🔥 Eingaben bereinigen (SEHR WICHTIG)
     email = String(email).trim().toLowerCase();
     code = String(code).trim();
 
-    console.log("VERIFY CLEANED:", email, code);
+    console.log("VERIFY:", email, code);
 
     if (!email || !code) {
-      return res.status(400).json({ success: false, message: "Missing data" });
+      return res.status(400).json({ success: false });
     }
 
-    const { data: adminData } = await supabase
-  .from("admin_users")
-  .select("*")
-  .eq("email", email);
-
-let role = "customer";
-
-if (adminData && adminData.length > 0) {
-  role = adminData[0].role;
-}
-
-return res.json({ success: true, role });
-
-    // 🔥 Neuesten Code holen (KEIN .single!)
+    // 🔥 CODE HOLEN
     const { data, error } = await supabase
       .from("login_codes")
       .select("*")
@@ -118,53 +139,52 @@ return res.json({ success: true, role });
     }
 
     if (!data || data.length === 0) {
-      console.log("KEIN CODE GEFUNDEN");
-      return res.json({ success: false, message: "No code found" });
+      return res.json({ success: false, message: "Kein Code" });
     }
 
     const latest = data[0];
 
-    const storedCode = String(latest.code).trim();
-
-    console.log("STORED CODE:", storedCode);
-    console.log("INPUT CODE:", code);
-
-    // 🔥 VERGLEICH (JETZT SICHER)
-    if (storedCode !== code) {
-      console.log("CODE STIMMT NICHT");
-      return res.json({ success: false, message: "Wrong code" });
+    if (String(latest.code).trim() !== code) {
+      return res.json({ success: false, message: "Falscher Code" });
     }
 
-    // 🔥 ABLAUFZEIT CHECK
     if (new Date(latest.expires) < new Date()) {
-      console.log("CODE ABGELAUFEN");
-      return res.json({ success: false, message: "Code expired" });
+      return res.json({ success: false, message: "Abgelaufen" });
     }
 
-    // 🔥 SESSION SPEICHERN
-    const sessionRes = await supabase.from("sessions").insert([
+    // 🔥 ROLE CHECK
+    const { data: adminData } = await supabase
+      .from("admin_users")
+      .select("*")
+      .eq("email", email);
+
+    let role = "customer";
+
+    if (adminData && adminData.length > 0) {
+      role = adminData[0].role;
+    }
+
+    // 🔥 SESSION
+    await supabase.from("sessions").insert([
       {
         email,
         created_at: new Date()
       }
     ]);
-    
 
-    console.log("SESSION RESULT:", sessionRes);
-
-    // 🔥 OPTIONAL: Code löschen nach Nutzung
+    // 🔥 CODE LÖSCHEN
     await supabase
       .from("login_codes")
       .delete()
       .eq("email", email);
 
-    console.log("LOGIN ERFOLGREICH");
+    console.log("LOGIN OK:", email, role);
 
-    return res.json({ success: true });
+    return res.json({ success: true, role });
 
   } catch (err) {
-    console.error("VERIFY SERVER ERROR:", err);
-    return res.status(500).json({ success: false });
+    console.error("VERIFY ERROR:", err);
+    res.status(500).json({ success: false });
   }
 });
 
