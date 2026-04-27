@@ -186,8 +186,12 @@ app.post("/verify", async (req, res) => {
 // =====================
 // HEALTH (gegen Render Sleep)
 // =====================
-app.get("/health", (req, res) => {
-  res.status(200).send("OK");
+setInterval(() => {
+  fetch("https://shop-server-feig.onrender.com/health");
+}, 5 * 60 * 1000);
+
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
 });
 
 // =====================
