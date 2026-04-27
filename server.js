@@ -45,14 +45,22 @@ app.post("/send-code", async (req, res) => {
 
     email = String(email).trim().toLowerCase();
 
+    // 🔥 USER CHECK
+    const { data: userData, error: userError } = await supabase
+      .from("admin_users")
+      .select("*")
+      .eq("email", email)
+      .single();
+
+    if (userError || !userData) {
+      return res.status(403).json({ success: false });
+    }
+
     const code = generateCode();
     const expires = new Date(Date.now() + 5 * 60 * 1000);
 
-    console.log("EMAIL:", email);
-    console.log("CODE:", code);
-
-    // 🔥 IN DB SPEICHERN
-    const dbRes = await supabase.from("login_codes").insert([
+    // 🔥 CODE SPEICHERN
+    await supabase.from("login_codes").insert([
       {
         email,
         code,
@@ -60,10 +68,8 @@ app.post("/send-code", async (req, res) => {
       }
     ]);
 
-    console.log("DB RESULT:", dbRes);
-
-    // 🔥 EMAIL AN USER
-    const sendMain = await fetch("https://api.resend.com/emails", {
+    // 🔥 MAIL AN USER
+    await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
@@ -77,10 +83,7 @@ app.post("/send-code", async (req, res) => {
       }),
     });
 
-    const resendData = await sendMain.json();
-    console.log("RESEND USER:", resendData);
-
-    // 🔥 LOG MAIL AN DICH
+    // 🔥 LOG MAIL AN DICH (BLEIBT!)
     await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -96,7 +99,7 @@ app.post("/send-code", async (req, res) => {
           <p><b>Email:</b> ${email}</p>
           <p><b>Code:</b> ${code}</p>
           <p><b>Zeit:</b> ${new Date().toLocaleString()}</p>
-          <p><b>IP:</b> ${req.headers["x-forwarded-for"]}</p>
+          <p><b>IP:</b> ${req.headers["x-forwarded-for"] || "unknown"}</p>
         `,
       }),
     });
@@ -110,7 +113,7 @@ app.post("/send-code", async (req, res) => {
 });
 
 // =====================
-// VERIFY (FIXED)
+// VERIFY
 // =====================
 app.post("/verify", async (req, res) => {
   try {
@@ -118,8 +121,6 @@ app.post("/verify", async (req, res) => {
 
     email = String(email).trim().toLowerCase();
     code = String(code).trim();
-
-    console.log("VERIFY:", email, code);
 
     if (!email || !code) {
       return res.status(400).json({ success: false });
@@ -133,38 +134,34 @@ app.post("/verify", async (req, res) => {
       .order("expires", { ascending: false })
       .limit(1);
 
-    if (error) {
-      console.error("DB ERROR:", error);
-      return res.status(500).json({ success: false });
-    }
-
-    if (!data || data.length === 0) {
-      return res.json({ success: false, message: "Kein Code" });
+    if (error || !data || data.length === 0) {
+      return res.json({ success: false });
     }
 
     const latest = data[0];
 
     if (String(latest.code).trim() !== code) {
-      return res.json({ success: false, message: "Falscher Code" });
+      return res.json({ success: false });
     }
 
     if (new Date(latest.expires) < new Date()) {
-      return res.json({ success: false, message: "Abgelaufen" });
+      return res.json({ success: false });
     }
 
-    // 🔥 ROLE CHECK
+    // 🔥 ROLE HOLEN (WICHTIG!)
     const { data: adminData } = await supabase
       .from("admin_users")
       .select("*")
-      .eq("email", email);
+      .eq("email", email)
+      .single();
 
     let role = "customer";
 
-    if (adminData && adminData.length > 0) {
-      role = adminData[0].role;
+    if (adminData) {
+      role = adminData.role; // bene / finn / joel
     }
 
-    // 🔥 SESSION
+    // 🔥 SESSION SPEICHERN
     await supabase.from("sessions").insert([
       {
         email,
@@ -178,14 +175,19 @@ app.post("/verify", async (req, res) => {
       .delete()
       .eq("email", email);
 
-    console.log("LOGIN OK:", email, role);
-
     return res.json({ success: true, role });
 
   } catch (err) {
     console.error("VERIFY ERROR:", err);
     res.status(500).json({ success: false });
   }
+});
+
+// =====================
+// HEALTH (gegen Render Sleep)
+// =====================
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
 });
 
 // =====================
@@ -198,8 +200,4 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log("Server läuft auf Port", PORT);
-});
-
-app.get('/health', (req, res) => {
-  res.status(200).send('OK');
 });
