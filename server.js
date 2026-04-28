@@ -11,7 +11,11 @@ const app = express();
 // CORS
 // =====================
 app.use(cors({
-  origin: "https://sixteenquarters.netlify.app"
+  origin: [
+    "https://sixteenquarters.netlify.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:5500"
+  ]
 }));
 
 app.options("*", cors());
