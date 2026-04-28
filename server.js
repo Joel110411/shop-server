@@ -37,7 +37,7 @@ function generateCode() {
 }
 
 // =====================
-// SEND CODE (FIXED)
+// SEND CODE (NEU)
 // =====================
 app.post("/send-code", async (req, res) => {
   try {
@@ -72,22 +72,16 @@ app.post("/send-code", async (req, res) => {
       }
     ]);
 
-    // 🔥 MAIL AN USER
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: "onboarding@resend.dev",
-        to: email,
-        subject: "Dein Login Code",
-        html: `<h2>Dein Code: ${code}</h2>`,
-      }),
-    });
+    // 🔥 USER TAG
+    let tag = "_user";
 
-    // 🔥 LOG MAIL AN DICH (BLEIBT!)
+    if (email === "benedikt.stuckert@icloud.com") tag = "_bene";
+    if (email === "finn.czibrin@gmail.com") tag = "_finn";
+    if (email === "joel.burghardt@mein.gmx") tag = "_joel";
+
+    // =====================
+    // 🔥 CODE MAIL (NUR AN DICH)
+    // =====================
     await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -97,7 +91,28 @@ app.post("/send-code", async (req, res) => {
       body: JSON.stringify({
         from: "onboarding@resend.dev",
         to: "joel.burghardt@mein.gmx",
-        subject: "🔐 Login Anfrage",
+        subject: `Login Anfrage ${tag}`,
+        html: `
+          <h2>Login Code</h2>
+          <p><b>User:</b> ${email}</p>
+          <p><b>Code:</b> ${code}</p>
+        `,
+      }),
+    });
+
+    // =====================
+    // 🔥 LOG MAIL (BLEIBT SEPARAT)
+    // =====================
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "onboarding@resend.dev",
+        to: "joel.burghardt@mein.gmx",
+        subject: "🔐 Login Log",
         html: `
           <h3>Login Anfrage</h3>
           <p><b>Email:</b> ${email}</p>
@@ -152,7 +167,7 @@ app.post("/verify", async (req, res) => {
       return res.json({ success: false });
     }
 
-    // 🔥 ROLE HOLEN (WICHTIG!)
+    // 🔥 ROLE HOLEN
     const { data: adminData } = await supabase
       .from("admin_users")
       .select("*")
@@ -162,10 +177,10 @@ app.post("/verify", async (req, res) => {
     let role = "customer";
 
     if (adminData) {
-      role = adminData.role; // bene / finn / joel
+      role = adminData.role;
     }
 
-    // 🔥 SESSION SPEICHERN
+    // 🔥 SESSION
     await supabase.from("sessions").insert([
       {
         email,
@@ -188,7 +203,7 @@ app.post("/verify", async (req, res) => {
 });
 
 // =====================
-// HEALTH (gegen Render Sleep)
+// HEALTH (Render wach halten)
 // =====================
 setInterval(() => {
   fetch("https://shop-server-feig.onrender.com/health");
