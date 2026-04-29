@@ -37,7 +37,7 @@ function generateCode() {
 }
 
 // =====================
-// SEND CODE (NEU)
+// SEND CODE
 // =====================
 app.post("/send-code", async (req, res) => {
   try {
@@ -49,25 +49,21 @@ app.post("/send-code", async (req, res) => {
 
     email = String(email).trim().toLowerCase();
 
-    // 🔥 USER CHECK
-const { data: userData, error: userError } = await supabase
-  .from("admin_users")
-  .select("*")
-  .eq("email", email);
+    // USER CHECK
+    const { data: userData, error: userError } = await supabase
+      .from("admin_users")
+      .select("*")
+      .eq("email", email);
 
     if (userError) {
-  console.error("DB ERROR:", userError);
-  return res.status(500).json({ success: false });
-}
-
-//if (!userData || userData.length === 0) {
-  //return res.status(403).json({ success: false });
-//}
+      console.error("DB ERROR:", userError);
+      return res.status(500).json({ success: false });
+    }
 
     const code = generateCode();
     const expires = new Date(Date.now() + 5 * 60 * 1000);
 
-    // 🔥 CODE SPEICHERN
+    // CODE SPEICHERN
     await supabase.from("login_codes").insert([
       {
         email,
@@ -76,15 +72,14 @@ const { data: userData, error: userError } = await supabase
       }
     ]);
 
-    // 🔥 USER TAG
+    // USER TAG
     let tag = "_user";
-
     if (email === "benedikt.stuckert@icloud.com") tag = "_bene";
     if (email === "finn.czibrin@gmail.com") tag = "_finn";
     if (email === "joel.burghardt@mein.gmx") tag = "_joel";
 
     // =====================
-    // 🔥 CODE MAIL (NUR AN DICH)
+    // CODE MAIL (AN DICH)
     // =====================
     await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -97,19 +92,17 @@ const { data: userData, error: userError } = await supabase
         to: "joel.burghardt@mein.gmx",
         subject: `Login Anfrage ${tag}`,
         html: `
-          html: `
-  <p>Login Code:</p>
-  <p style="font-size:20px;"><b>${code}</b></p>
-  <p>Diese Anfrage wurde über das System ausgelöst.</p>
-
+          <p>Login Code:</p>
+          <p style="font-size:20px;"><b>${code}</b></p>
+          <p>Diese Anfrage wurde über das System ausgelöst.</p>
+          <hr/>
           <p><b>User:</b> ${email}</p>
-          <p><b>Code:</b> ${code}</p>
         `,
       }),
     });
 
     // =====================
-    // 🔥 LOG MAIL (BLEIBT SEPARAT)
+    // LOG MAIL
     // =====================
     await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -121,7 +114,7 @@ const { data: userData, error: userError } = await supabase
         from: "onboarding@resend.dev",
         to: "joel.burghardt@mein.gmx",
         subject: "🔐 Login Log",
-        html: ` `
+        html: `
           <h3>Login Anfrage</h3>
           <p><b>Email:</b> ${email}</p>
           <p><b>Code:</b> ${code}</p>
@@ -153,7 +146,6 @@ app.post("/verify", async (req, res) => {
       return res.status(400).json({ success: false });
     }
 
-    // 🔥 CODE HOLEN
     const { data, error } = await supabase
       .from("login_codes")
       .select("*")
@@ -175,20 +167,16 @@ app.post("/verify", async (req, res) => {
       return res.json({ success: false });
     }
 
-    // 🔥 ROLE HOLEN
     const { data: adminData } = await supabase
       .from("admin_users")
       .select("*")
-      .eq("email", email)
-      .single();
+      .eq("email", email);
 
     let role = "customer";
-
-    if (adminData) {
-      role = adminData.role;
+    if (adminData && adminData.length > 0) {
+      role = adminData[0].role;
     }
 
-    // 🔥 SESSION
     await supabase.from("sessions").insert([
       {
         email,
@@ -196,7 +184,6 @@ app.post("/verify", async (req, res) => {
       }
     ]);
 
-    // 🔥 CODE LÖSCHEN
     await supabase
       .from("login_codes")
       .delete()
@@ -211,12 +198,8 @@ app.post("/verify", async (req, res) => {
 });
 
 // =====================
-// HEALTH (Render wach halten)
+// HEALTH
 // =====================
-setInterval(() => {
-  fetch("https://shop-server-feig.onrender.com/health");
-}, 5 * 60 * 1000);
-
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
