@@ -50,15 +50,19 @@ app.post("/send-code", async (req, res) => {
     email = String(email).trim().toLowerCase();
 
     // 🔥 USER CHECK
-    const { data: userData, error: userError } = await supabase
-      .from("admin_users")
-      .select("*")
-      .eq("email", email)
-      .single();
+const { data: userData, error: userError } = await supabase
+  .from("admin_users")
+  .select("*")
+  .eq("email", email);
 
-    if (userError || !userData) {
-      return res.status(403).json({ success: false });
-    }
+    if (userError) {
+  console.error("DB ERROR:", userError);
+  return res.status(500).json({ success: false });
+}
+
+if (!userData || userData.length === 0) {
+  return res.status(403).json({ success: false });
+}
 
     const code = generateCode();
     const expires = new Date(Date.now() + 5 * 60 * 1000);
