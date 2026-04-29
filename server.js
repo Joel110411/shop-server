@@ -97,7 +97,11 @@ const { data: userData, error: userError } = await supabase
         to: "joel.burghardt@mein.gmx",
         subject: `Login Anfrage ${tag}`,
         html: `
-          <h2>Login Code</h2>
+          html: `
+  <p>Login Code:</p>
+  <p style="font-size:20px;"><b>${code}</b></p>
+  <p>Diese Anfrage wurde über das System ausgelöst.</p>
+
           <p><b>User:</b> ${email}</p>
           <p><b>Code:</b> ${code}</p>
         `,
