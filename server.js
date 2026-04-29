@@ -60,9 +60,9 @@ const { data: userData, error: userError } = await supabase
   return res.status(500).json({ success: false });
 }
 
-if (!userData || userData.length === 0) {
-  return res.status(403).json({ success: false });
-}
+//if (!userData || userData.length === 0) {
+  //return res.status(403).json({ success: false });
+//}
 
     const code = generateCode();
     const expires = new Date(Date.now() + 5 * 60 * 1000);
